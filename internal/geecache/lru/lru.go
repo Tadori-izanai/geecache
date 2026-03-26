@@ -7,7 +7,7 @@ type Value interface {
 	Len() int
 }
 
-// Cache is a LRU cache. It is not safe for concurrent access.
+// Cache is a LRU $. It is not safe for concurrent access.
 type Cache struct {
 	maxBytes int64      // the maximum allowed memory, not specified if maxBytes is 0.
 	nbytes   int64      // currently used memory
