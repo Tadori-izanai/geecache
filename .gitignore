@@ -1,0 +1,11 @@
+# ide
+.vscode/
+.idea/
+
+# temp ignore
+*.log
+*.cache
+*.diff
+
+# system ignore
+.DS_Store
