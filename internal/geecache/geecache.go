@@ -25,13 +25,20 @@ func (f GetterFunc) Get(key string) ([]byte, error) {
 //                 |-----> 是否应当从远程节点获取 -----> 与远程节点交互 --> 返回缓存值 (2)
 //                     |  N
 //                     |-----> 调用回调函数 `getter`，获取值并添加到缓存 --> 返回缓存值 (3)
+//
+// For process (2):
+//
+// 使用一致性哈希选择节点        Y                                    Y
+//     |-----> 是否是远程节点 -----> HTTP 客户端访问远程节点 --> 成功？-----> 服务端返回返回值
+//                     |  N                                    ↓  N
+//                     |----------------------------> 回退到本地节点处理。
 
-// A Group implements (1) and (3)
 // A Group is a $ namespace and associated data loaded spread over
 type Group struct {
-	name      string
-	getter    Getter
-	mainCache cache
+	name       string
+	getter     Getter
+	mainCache  cache
+	peerPicker PeerPicker
 }
 
 var (
@@ -63,6 +70,14 @@ func GetGroup(name string) *Group {
 	return groups[name]
 }
 
+// RegisterPicker registers a PeerPicker for choosing remote peer
+func (g *Group) RegisterPicker(peer PeerPicker) {
+	if g.peerPicker != nil {
+		panic("RegisterPicker called more than once")
+	}
+	g.peerPicker = peer
+}
+
 // Get value for a key from $
 func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
@@ -74,12 +89,31 @@ func (g *Group) Get(key string) (ByteView, error) {
 		log.Println("[GeeCache] hit")
 		return v, nil
 	}
-	// process (3)
+	// process (2) and (3)
 	return g.load(key)
 }
 
 func (g *Group) load(key string) (ByteView, error) {
+	// process (2)
+	if g.peerPicker != nil {
+		if peer, ok := g.peerPicker.PickPeer(key); ok {
+			if value, err := g.getFromPeer(peer, key); err == nil {
+				return value, nil
+			}
+			log.Println("[GeeCache] Failed to get from peer", peer)
+		}
+	}
+
+	// process (3)
 	return g.getLocally(key)
+}
+
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+	return ByteView{b: bytes}, nil
 }
 
 func (g *Group) getLocally(key string) (ByteView, error) {

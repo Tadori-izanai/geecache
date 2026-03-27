@@ -1,15 +1,14 @@
 package geecache
 
-//                              Y
-// 接收 key --> 检查是否被缓存 -----> 返回缓存值 (1)
-//                 |  N                           Y
-//                 |-----> 是否应当从远程节点获取 -----> 与远程节点交互 --> 返回缓存值 (2)
-//                     |  N
-//                     |-----> 调用回调函数 `getter`，获取值并添加到缓存 --> 返回缓存值 (3)
-//
-// For process (2):
-//
-// 使用一致性哈希选择节点        Y                                    Y
-//     |-----> 是否是远程节点 -----> HTTP 客户端访问远程节点 --> 成功？-----> 服务端返回返回值
-//                     |  N                                    ↓  N
-//                     |----------------------------> 回退到本地节点处理。
+// PeerPicker is the interface that must be implemented to locate
+// the peer that owns a specific key.
+type PeerPicker interface {
+	// PickPeer selects corresponding PeerGetter according to key.
+	PickPeer(key string) (PeerGetter, bool)
+}
+
+// PeerGetter is the interface that must be implemented by a peer.
+type PeerGetter interface {
+	// Get gets $ value from the corresponding group
+	Get(group string, key string) ([]byte, error)
+}
