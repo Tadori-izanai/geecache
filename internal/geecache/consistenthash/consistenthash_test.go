@@ -34,4 +34,15 @@ func TestHashing(t *testing.T) {
 			t.Errorf("Asking for %s, should have yielded %s", k, v)
 		}
 	}
+
+	// Remove 2, then the all hashes should become:
+	// 4, 6, 8, 14, 16, 18, 24, 26, 28
+	hash.Remove("2")
+	testCases["2"] = "4"
+	testCases["11"] = "4"
+	for k, v := range testCases {
+		if w := hash.Get(k); w != v {
+			t.Errorf("Asking for %s, should have yielded %s, got %s", k, v, w)
+		}
+	}
 }

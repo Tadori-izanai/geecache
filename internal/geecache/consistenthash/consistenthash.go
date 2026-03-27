@@ -53,7 +53,7 @@ func (m *Map) Remove(keys string) {
 	}
 
 	newKeys := make([]int, 0, len(m.keys)-len(hashesToRemove))
-	for key := range m.keys {
+	for _, key := range m.keys {
 		if _, ok := hashesToRemove[key]; ok {
 			continue
 		}
