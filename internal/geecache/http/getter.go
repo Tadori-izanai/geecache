@@ -1,7 +1,8 @@
-package geecache
+package http
 
 import (
 	"fmt"
+	"geecache/internal/geecache"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,7 +14,7 @@ type httpGetter struct {
 	baseURL string
 }
 
-var _ PeerGetter = new(httpGetter)
+var _ geecache.PeerGetter = new(httpGetter)
 
 func (h *httpGetter) Get(group, key string) ([]byte, error) {
 	// url.QueryEscape ensures that special characters in a query parameter value

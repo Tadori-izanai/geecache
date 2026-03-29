@@ -1,7 +1,8 @@
-package geecache
+package http
 
 import (
 	"fmt"
+	"geecache/internal/geecache"
 	"log"
 	"net/http"
 	"strings"
@@ -43,7 +44,7 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	groupName, key := parts[0], parts[1]
 
-	group := GetGroup(groupName)
+	group := geecache.GetGroup(groupName)
 	if group == nil {
 		http.Error(w, "no such group: "+groupName, http.StatusNotFound)
 		return

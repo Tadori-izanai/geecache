@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"geecache/internal/geecache"
+	http2 "geecache/internal/geecache/http"
 	"log"
 	"net/http"
 )
@@ -25,8 +26,8 @@ func main() {
 	geecache.NewGroup("scores", 2<<10, geecache.GetterFunc(callback))
 
 	addr := "localhost:9999"
-	peers := geecache.NewHTTPPool(addr)
-	
+	peers := http2.NewHTTPPool(addr)
+
 	log.Println("geecache is running at", addr)
 	log.Fatal(http.ListenAndServe(addr, peers))
 }

@@ -2,7 +2,7 @@ package geecache
 
 import (
 	"errors"
-	"geecache/internal/geecache/singleflight"
+	"geecache/pkg/singleflight"
 	"log"
 	"sync"
 )

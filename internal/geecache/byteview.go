@@ -1,6 +1,8 @@
 package geecache
 
-import "geecache/internal/geecache/lru"
+import (
+	"geecache/pkg/lru"
+)
 
 // ByteView is a readonly data structure, used to represent $ values
 type ByteView struct {

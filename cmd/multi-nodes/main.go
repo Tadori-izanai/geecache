@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"geecache/internal/geecache"
+	peer "geecache/internal/geecache/http"
 	"log"
 	"net/http"
 )
@@ -29,7 +30,7 @@ func createGroup() *geecache.Group {
 
 // startCacheServer sets local node `addr` and remote nodes `addrs` for given namespace
 func startCacheServer(addr string, addrs []string, gee *geecache.Group) {
-	srv := geecache.NewHTTPPicker(addr)
+	srv := peer.NewHTTPPicker(addr)
 	srv.Set(addrs...)
 	gee.RegisterPicker(srv)
 
