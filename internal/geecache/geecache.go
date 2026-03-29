@@ -2,6 +2,7 @@ package geecache
 
 import (
 	"errors"
+	"geecache/internal/geecache/singleflight"
 	"log"
 	"sync"
 )
@@ -39,6 +40,8 @@ type Group struct {
 	getter     Getter
 	mainCache  cache
 	peerPicker PeerPicker
+	// use singleflight.Group to make sure that each key is only fetched once
+	loader *singleflight.Group
 }
 
 var (
@@ -55,6 +58,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 
 	mu.Lock()
@@ -90,7 +94,13 @@ func (g *Group) Get(key string) (ByteView, error) {
 		return v, nil
 	}
 	// process (2) and (3)
-	return g.load(key)
+	bv, err := g.loader.Do(key, func() (any, error) {
+		return g.load(key)
+	})
+	if err == nil {
+		return bv.(ByteView), nil
+	}
+	return ByteView{}, err
 }
 
 func (g *Group) load(key string) (ByteView, error) {
