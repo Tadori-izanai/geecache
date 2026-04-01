@@ -117,14 +117,9 @@ func main() {
 	}
 
 	discovery := registry.NewDiscovery(cli, servicePrefix)
-	nodes, err := discovery.List(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	picker.UpdatePeers(nodeAddrs(nodes))
 
 	go func() {
-		err := discovery.Watch(ctx, func(nodes []registry.Node) {
+		err := discovery.SyncAndWatch(ctx, func(nodes []registry.Node) {
 			picker.UpdatePeers(nodeAddrs(nodes))
 		})
 		if err != nil && ctx.Err() == nil {
