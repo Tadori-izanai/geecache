@@ -22,7 +22,7 @@ run-http:
 	nohup target/http-node -port=8002 2>&1 > target/8002.log &
 	nohup target/http-node -port=8003 -api=true 2>&1 > target/8003.log &
 
-run-grpc:
+run:
 	nohup target/grpc-node -port=8001 2>&1 > target/8001.log &
 	nohup target/grpc-node -port=8002 2>&1 > target/8002.log &
 	nohup target/grpc-node -port=8003 -api=true 2>&1 > target/8003.log &
@@ -30,5 +30,5 @@ run-grpc:
 stop-http:
 	pkill -f target/http-node
 
-stop-grpc:
+stop:
 	pkill -f target/grpc-node

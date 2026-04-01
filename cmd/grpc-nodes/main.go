@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"geecache/internal/geecache"
 	peer "geecache/internal/geecache/grpc"
+	registry "geecache/internal/geecache/registry/etcd"
 	"google.golang.org/grpc"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -35,13 +39,12 @@ func createGroup() *geecache.Group {
 }
 
 // startCacheServer sets local node `addr` and remote nodes `addrs` for given namespace
-func startCacheServer(addr string, addrs []string, gee *geecache.Group) *grpc.Server {
+func startCacheServer(addr string, gee *geecache.Group) (*peer.RPCPicker, *grpc.Server) {
 	srv := peer.NewRPCPicker(addr)
-	srv.Set(addrs...)
 	gee.RegisterPicker(srv)
 
 	log.Println("geecache is running at", addr)
-	return srv.Server.StartServer()
+	return srv, srv.Server.StartServer()
 }
 
 // startAPIServer sets an API service (port 9999) and interacts with users, for given namespace
@@ -68,8 +71,14 @@ func startAPIServer(apiAddr string, gee *geecache.Group) {
 func main() {
 	var port int
 	var api bool
+	var etcdEndpoints string
+	var servicePrefix string
+	var nodeID string
 	flag.IntVar(&port, "port", 8001, "Geecache server port")
 	flag.BoolVar(&api, "api", false, "Whether start a api server")
+	flag.StringVar(&etcdEndpoints, "etcd", "127.0.0.1:2379", "Comma-separated etcd endpoints")
+	flag.StringVar(&servicePrefix, "service-prefix", "/services/geecache/nodes/", "Service prefix in etcd")
+	flag.StringVar(&nodeID, "node-id", "", "Unique node ID in etcd, defaults to addr")
 	flag.Parse()
 
 	apiAddr := "http://localhost:9999"
@@ -79,18 +88,50 @@ func main() {
 		8003: "localhost:8003",
 	}
 
-	addrs := make([]string, 0, len(addrMap))
-	for _, v := range addrMap {
-		addrs = append(addrs, v)
+	addr, ok := addrMap[port]
+	if !ok {
+		log.Fatalf("unknown port: %d", port)
+	}
+	if nodeID == "" {
+		nodeID = addr
 	}
 
 	gee := createGroup()
 	if api {
 		go startAPIServer(apiAddr, gee)
 	}
-	rpcSrv := startCacheServer(addrMap[port], addrs, gee)
+	picker, rpcSrv := startCacheServer(addr, gee)
 
-	// signal
+	cli, err := registry.NewClient(strings.Split(etcdEndpoints, ","))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cli.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	registrar := registry.NewRegistrar(cli, servicePrefix, registry.Node{ID: nodeID, Addr: addr})
+	if err := registrar.Register(ctx, 10); err != nil {
+		log.Fatal(err)
+	}
+
+	discovery := registry.NewDiscovery(cli, servicePrefix)
+	nodes, err := discovery.List(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	picker.UpdatePeers(nodeAddrs(nodes))
+
+	go func() {
+		err := discovery.Watch(ctx, func(nodes []registry.Node) {
+			picker.UpdatePeers(nodeAddrs(nodes))
+		})
+		if err != nil && ctx.Err() == nil {
+			log.Printf("etcd discovery stopped: %v", err)
+		}
+	}()
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
 	for {
@@ -98,6 +139,12 @@ func main() {
 		glog.Infof("geecache get a signal %s", s.String())
 		switch s {
 		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
+			cancel()
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			if err := registrar.Deregister(shutdownCtx); err != nil {
+				log.Printf("failed to deregister node: %v", err)
+			}
+			shutdownCancel()
 			rpcSrv.GracefulStop()
 			glog.Infof("geecache exit")
 			glog.Flush()
@@ -107,4 +154,15 @@ func main() {
 			return
 		}
 	}
+}
+
+func nodeAddrs(nodes []registry.Node) []string {
+	addrs := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		if node.Addr == "" {
+			continue
+		}
+		addrs = append(addrs, node.Addr)
+	}
+	return addrs
 }

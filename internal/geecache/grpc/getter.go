@@ -17,31 +17,28 @@ const (
 	grpcMaxCallMsgSize        = 1 << 24
 	grpcKeepAliveTime         = time.Second * 10
 	grpcKeepAliveTimeout      = time.Second * 3
-	//grpcBackoffMaxDelay       = time.Second * 3
 )
 
 type rpcGetter struct {
 	addr   string
+	conn   *grpc.ClientConn
 	client pb.GroupCacheClient
 }
 
-func newPRCGetter(addr string) *rpcGetter {
+func newRPCGetter(addr string) *rpcGetter {
+	conn, client := newClient(addr)
 	return &rpcGetter{
 		addr:   addr,
-		client: newClient(addr),
+		conn:   conn,
+		client: client,
 	}
 }
 
-func newClient(addr string) pb.GroupCacheClient {
+func newClient(addr string) (*grpc.ClientConn, pb.GroupCacheClient) {
 	conn, err := grpc.NewClient(addr,
 		grpc.WithInsecure(),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                grpcInitialWindowSize,
-			Timeout:             grpcInitialConnWindowSize,
-			PermitWithoutStream: true,
-		}),
 		grpc.WithInitialWindowSize(grpcInitialWindowSize),
-		grpc.WithInitialConnWindowSize(grpcInitialWindowSize),
+		grpc.WithInitialConnWindowSize(grpcInitialConnWindowSize),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(grpcMaxCallMsgSize)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(grpcMaxSendMsgSize)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -53,8 +50,7 @@ func newClient(addr string) pb.GroupCacheClient {
 	if err != nil {
 		panic(err)
 	}
-	//defer conn.Close()
-	return pb.NewGroupCacheClient(conn)
+	return conn, pb.NewGroupCacheClient(conn)
 }
 
 var _ geecache.PeerGetter = new(rpcGetter)
@@ -68,4 +64,8 @@ func (r *rpcGetter) Get(group, key string) ([]byte, error) {
 		return nil, err
 	}
 	return reply.Value, nil
+}
+
+func (r *rpcGetter) Close() error {
+	return r.conn.Close()
 }
